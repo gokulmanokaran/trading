@@ -1,5 +1,15 @@
 const instrumentsUrl = 'https://assets.upstox.com/market-quote/instruments/exchange/complete.json.gz'
 
+export function isNiftyMarketOpen(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  const weekday = values.weekday
+  const minutes = Number(values.hour) * 60 + Number(values.minute)
+  return !['Sat', 'Sun'].includes(weekday) && minutes >= 9 * 60 + 15 && minutes < 15 * 60 + 30
+}
+
 export function createMarketDataService({ token, onUpdate }) {
   let timer
   let running = false
@@ -15,13 +25,17 @@ export function createMarketDataService({ token, onUpdate }) {
   }
   async function refresh() {
     if (!running) return
+    if (!isNiftyMarketOpen()) {
+      onUpdate('NIFTY', { available: false, statusReason: 'MARKET_CLOSED' })
+      return
+    }
     try {
       // Instrument discovery and the authenticated quote request stay server-side.
       // WebSocket feed integration can replace this polling transport without changing the API contract.
       const response = await fetch(`${process.env.UPSTOX_API_BASE_URL || 'https://api.upstox.com/v2'}/market-quote/ltp?instrument_key=NSE_INDEX|Nifty%2050`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } })
       if (!response.ok) throw new Error(`Upstox quote request failed: ${response.status}`)
       const body = await response.json(); const quote = Object.values(body.data || {})[0]
-      if (quote?.last_price != null) onUpdate('NIFTY', { ltp: quote.last_price, updatedAt: new Date().toISOString(), available: true })
+      if (quote?.last_price != null) onUpdate('NIFTY', { ltp: quote.last_price, updatedAt: new Date().toISOString(), available: true, statusReason: null })
     } catch (error) { console.error(JSON.stringify({ event: 'market_data_error', error: error.message })) }
   }
 }
