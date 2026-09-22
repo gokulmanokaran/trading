@@ -4,6 +4,7 @@ import cors from 'cors'
 import { createClient } from '@supabase/supabase-js'
 import { createMarketDataService } from './services/marketDataService.js'
 import { createCallMonitor } from './services/callMonitorService.js'
+import { createLiveSignalEngine } from './services/liveSignalEngine.js'
 
 const app = express()
 const port = Number(process.env.PORT || 3001)
@@ -20,7 +21,8 @@ const marketDataService = createMarketDataService({
   token: process.env.UPSTOX_ACCESS_TOKEN,
   onUpdate: (market, update) => { marketState[market] = { ...marketState[market], ...update } }
 })
-const callMonitor = createCallMonitor({ supabase })
+const callMonitor = createCallMonitor({ supabase, token: process.env.UPSTOX_ACCESS_TOKEN })
+const signalEngine = createLiveSignalEngine({ supabase, token: process.env.UPSTOX_ACCESS_TOKEN, onSignal: signal => console.log(JSON.stringify({ event: 'call_persisted', id: signal.id, market: signal.market })) })
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, marketDataConfigured: hasUpstox, persistenceConfigured: Boolean(supabase) }))
 app.get('/api/market', (_req, res) => res.json(marketState))
@@ -43,8 +45,9 @@ app.get('/api/calls/active', async (_req, res) => {
 const server = app.listen(port, async () => {
   console.log(JSON.stringify({ event: 'server_started', port, marketDataConfigured: hasUpstox, persistenceConfigured: Boolean(supabase) }))
   await marketDataService.start()
+  await signalEngine.start()
 })
 const monitorTimer = setInterval(callMonitor, 5000)
-const shutdown = () => { clearInterval(monitorTimer); marketDataService.stop(); server.close(() => process.exit(0)) }
+const shutdown = () => { clearInterval(monitorTimer); marketDataService.stop(); signalEngine.stop(); server.close(() => process.exit(0)) }
 process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
