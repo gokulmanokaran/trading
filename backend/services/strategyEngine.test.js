@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { ema, rsi, scoreSetup } from './strategyEngine.js'
-import { isNiftyMarketOpen } from './marketDataService.js'
+import { isCrudeMarketOpen, isNiftyMarketOpen } from './marketDataService.js'
 
 const candles = (count, start, step, volume = 100) => Array.from({ length: count }, (_, index) => { const close = start + index * step; return { open: close - 1, high: close + 2, low: close - 2, close, volume } })
 
@@ -15,6 +15,11 @@ test('NIFTY is live only during the Indian market session', () => {
   assert.equal(isNiftyMarketOpen(new Date('2026-09-22T05:00:00.000Z')), true)
   assert.equal(isNiftyMarketOpen(new Date('2026-09-22T10:00:00.000Z')), false)
   assert.equal(isNiftyMarketOpen(new Date('2026-09-26T05:00:00.000Z')), false)
+})
+
+test('Crude uses its longer MCX session independently', () => {
+  assert.equal(isCrudeMarketOpen(new Date('2026-09-22T16:00:00.000Z')), true)
+  assert.equal(isCrudeMarketOpen(new Date('2026-09-22T18:00:00.000Z')), false)
 })
 
 test('strategy fails closed when required data is absent', () => {
