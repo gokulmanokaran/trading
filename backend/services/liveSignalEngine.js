@@ -23,11 +23,26 @@ export function createLiveSignalEngine({ token, supabase, onSignal = () => {} })
   let instruments = []
   let lastRun = new Map()
 
+  let instrumentsLoadedAt = 0
+  async function ensureInstruments() {
+    const TWELVE_HOURS = 12 * 60 * 60 * 1000
+    if (!instruments.length || (Date.now() - instrumentsLoadedAt) > TWELVE_HOURS) {
+      instruments = await loadInstruments()
+      instrumentsLoadedAt = Date.now()
+      console.log(JSON.stringify({ event: 'instruments_loaded', count: instruments.length }))
+    }
+    return instruments
+  }
+
   return { start, stop }
 
   async function start() {
     if (!token || !supabase) { console.warn(JSON.stringify({ event: 'signal_engine_disabled', reason: !token ? 'UPSTOX_ACCESS_TOKEN is missing' : 'Supabase is not configured' })); return }
-    instruments = await loadInstruments()
+    try {
+      await ensureInstruments()
+    } catch (err) {
+      console.error(JSON.stringify({ event: 'instruments_initial_load_error', error: err.message }))
+    }
     running = true
     console.log(JSON.stringify({ event: 'signal_engine_started', markets: Object.keys(markets), interval: '5m' }))
     await runAll()
@@ -38,6 +53,12 @@ export function createLiveSignalEngine({ token, supabase, onSignal = () => {} })
 
   async function runAll() {
     if (!running) return
+    try {
+      await ensureInstruments()
+    } catch (err) {
+      console.error(JSON.stringify({ event: 'instruments_refresh_error', error: err.message }))
+      return
+    }
     for (const market of Object.keys(markets)) {
       try { await evaluateMarket(market) } catch (error) { console.error(JSON.stringify({ event: 'signal_engine_error', market, error: error.message })) }
     }

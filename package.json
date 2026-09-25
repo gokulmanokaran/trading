@@ -4,12 +4,15 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm:dev:server\" \"npm:dev:client\"",
+    "dev": "concurrently \"npm:dev:server\" \"npm:dev:worker\" \"npm:dev:client\"",
     "dev:server": "node --watch backend/server.js",
+    "dev:worker": "node --watch backend/worker.js",
     "dev:client": "vite",
     "build": "vite build",
     "test": "node --test backend/services/*.test.js",
-    "start": "node backend/server.js"
+    "start": "node backend/server.js",
+    "worker": "node backend/worker.js",
+    "monitor": "python monitoring/service.py"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
